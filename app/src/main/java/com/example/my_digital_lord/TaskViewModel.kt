@@ -1,10 +1,18 @@
 package com.example.my_digital_lord
 
-import android.os.Build
-import androidx.annotation.RequiresApi
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.my_digital_lord.di.ServiceLocator
+import com.example.my_digital_lord.data.remote.ParseRequest
+import com.example.my_digital_lord.utils.TaskParser
+import com.example.my_digital_lord.utils.ParsedTask   // импорт из TaskParser
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonDeserializer
+import com.google.gson.JsonPrimitive
+import com.google.gson.JsonSerializer
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +23,23 @@ import java.time.format.DateTimeFormatter
 
 class TasksViewModel : ViewModel() {
 
-    private val repository = ServiceLocator.taskRepository
+    private val prefs = App.getInstance().getSharedPreferences("tasks_prefs", Context.MODE_PRIVATE)
+
+    // Правильный Gson с явными типами для сериализатора/десериализатора
+    private val gson: Gson = GsonBuilder()
+        .registerTypeAdapter(
+            LocalDateTime::class.java,
+            JsonSerializer<LocalDateTime> { src, _, _ ->
+                JsonPrimitive(src.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+            }
+        )
+        .registerTypeAdapter(
+            LocalDateTime::class.java,
+            JsonDeserializer<LocalDateTime> { json, _, _ ->
+                LocalDateTime.parse(json.asString, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            }
+        )
+        .create()
 
     private val _tasks = MutableStateFlow<List<Task>>(emptyList())
     val tasks: StateFlow<List<Task>> = _tasks.asStateFlow()
@@ -30,13 +54,30 @@ class TasksViewModel : ViewModel() {
     val parseError: StateFlow<String?> = _parseError.asStateFlow()
 
     init {
-        _tasks.value = listOf(
-            Task(
-                title = "Добавь свою первую задачу",
-                deadline = LocalDateTime.now().plusDays(2),
-                priority = Priority.HIGH
+        loadTasks()
+    }
+
+    private fun loadTasks() {
+        val json = prefs.getString("tasks", null)
+        if (json != null) {
+            val type = object : TypeToken<List<Task>>() {}.type
+            _tasks.value = gson.fromJson(json, type) ?: emptyList()
+        }
+        if (_tasks.value.isEmpty()) {
+            _tasks.value = listOf(
+                Task(
+                    title = "Добавь свою первую задачу",
+                    deadline = LocalDateTime.now().plusDays(2),
+                    priority = Priority.HIGH
+                )
             )
-        )
+            saveTasks()
+        }
+    }
+
+    private fun saveTasks() {
+        val json = gson.toJson(_tasks.value)
+        prefs.edit().putString("tasks", json).apply()
     }
 
     fun openAddTaskSheet() {
@@ -51,9 +92,49 @@ class TasksViewModel : ViewModel() {
     }
 
     fun addTaskWithAiParse(rawText: String) {
-        addTaskManually(rawText)
-        _parseError.value = "Сервер AI-парсинга временно недоступен. Задача создана локально."
-        closeAddTaskSheet()
+        viewModelScope.launch {
+            _isParsing.value = true
+            _parseError.value = null
+
+            try {
+                // Сначала пробуем серверный AI
+                val serverResult = callServerAi(rawText)
+                val (title, deadline, priority) = if (serverResult != null) {
+                    Triple(serverResult.title, serverResult.deadline, serverResult.priority)
+                } else {
+                    val parsed = TaskParser.parse(rawText)
+                    Triple(parsed.title, parsed.deadline, parsed.priority)
+                }
+
+                val newTask = Task(
+                    title = title,
+                    description = rawText,
+                    deadline = deadline,
+                    priority = priority
+                )
+                _tasks.update { it + newTask }
+                saveTasks()
+            } catch (e: Exception) {
+                _parseError.value = "Ошибка парсинга: ${e.localizedMessage}"
+            } finally {
+                _isParsing.value = false
+                closeAddTaskSheet()
+            }
+        }
+    }
+
+    private suspend fun callServerAi(text: String): ParsedTask? {
+        return try {
+            val response = ServiceLocator.apiService.parseTask(ParseRequest(text))
+            ParsedTask(
+                title = response.title,
+                deadline = response.deadline?.let { parseIsoDateTime(it) },
+                priority = mapPriority(response.priority),
+                category = null
+            )
+        } catch (e: Exception) {
+            null
+        }
     }
 
     fun addTaskManually(title: String) {
@@ -63,6 +144,7 @@ class TasksViewModel : ViewModel() {
             priority = Priority.MEDIUM
         )
         _tasks.update { currentTasks -> currentTasks + newTask }
+        saveTasks()
     }
 
     private fun mapPriority(priorityStr: String): Priority {
@@ -88,10 +170,12 @@ class TasksViewModel : ViewModel() {
                 if (task.id == taskId) task.copy(isCompleted = !task.isCompleted) else task
             }
         }
+        saveTasks()
     }
 
     fun deleteTask(taskId: String) {
         _tasks.update { tasks -> tasks.filter { it.id != taskId } }
+        saveTasks()
     }
 
     fun clearParseError() {

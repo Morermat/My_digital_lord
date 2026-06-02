@@ -1,5 +1,6 @@
 package com.example.my_digital_lord
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -75,8 +77,12 @@ fun AuthScreen(
                     .background(MaterialTheme.colorScheme.surface),
                 contentAlignment = Alignment.Center
             ) {
-                Text("👑", style = MaterialTheme.typography.displaySmall, textAlign = TextAlign.Center)
-            }
+                Image(
+                    painter = painterResource(R.drawable.lord_splash),
+                    contentDescription = "Господин",
+                    modifier = Modifier.fillMaxSize()
+                )
+                }
 
             Spacer(modifier = Modifier.height(32.dp))
 

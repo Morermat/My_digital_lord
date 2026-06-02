@@ -1,6 +1,7 @@
 package com.example.my_digital_lord
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 
 @SuppressLint("StateFlowValueCalledInComposition")
@@ -56,11 +58,10 @@ fun TasksScreen(
                     modifier = Modifier.align(Alignment.Center),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.List,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                    Image(
+                        painter = painterResource(R.drawable.lord_task),
+                        contentDescription = "Господин недоволен",
+                        modifier = Modifier.size(64.dp)
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(

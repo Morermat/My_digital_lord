@@ -7,6 +7,16 @@ import retrofit2.http.POST
 interface ApiService {
     @POST("/api/auth/vk")
     suspend fun exchangeCode(@Body request: VkAuthRequest): AuthResponse
+
     @POST("/api/auth/logout")
     suspend fun logout(@Body request: LogoutRequest): Response<Unit>
+
+    @POST("/api/auth/refresh")
+    suspend fun refreshToken(@Body request: RefreshRequest): RefreshResponse
+
+    @POST("/api/tasks/parse")
+    suspend fun parseTask(@Body request: ParseRequest): ParseResponse
+
+    @POST("/api/test")
+    suspend fun test(): Response<Unit>
 }

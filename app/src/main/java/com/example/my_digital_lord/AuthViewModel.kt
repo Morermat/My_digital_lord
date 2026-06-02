@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.util.Log
 import android.webkit.CookieManager
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.my_digital_lord.data.remote.VkAuthRequest

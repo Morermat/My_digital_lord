@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +34,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,7 +88,11 @@ fun SplashScreen(
                     .background(MaterialTheme.colorScheme.surface),
                 contentAlignment = Alignment.Center
             ) {
-                // TODO: господин
+                Image(
+                    painter = painterResource(R.drawable.lord_splash),
+                    contentDescription = "Господин",
+                    modifier = Modifier.fillMaxSize()
+                )
             }
             Spacer(modifier = Modifier.height(32.dp))
 

@@ -23,18 +23,12 @@ object ServiceLocator {
         sessionExpiredCallback = callback
     }
 
-    private val tokenAuthenticator by lazy {
-        TokenAuthenticator(tokenManager) { sessionExpiredCallback?.invoke() }
-    }
-
     private val okHttpClient: OkHttpClient by lazy {
-        val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
-        }
+        val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY }
         OkHttpClient.Builder()
             .addInterceptor(logging)
             .addInterceptor(authInterceptor)
-            .authenticator(tokenAuthenticator)
+            .authenticator(TokenAuthenticator(tokenManager) { sessionExpiredCallback?.invoke() })
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
