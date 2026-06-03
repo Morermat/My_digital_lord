@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -17,31 +18,46 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.rememberScrollState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimerBottomSheet(
     viewModel: TimerViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onVisibilityChange: (Boolean) -> Unit
 ) {
     val activeSession by viewModel.activeSession.collectAsState()
     var currentTime by remember { mutableStateOf(0L) }
 
+    // Скрыть навигацию при открытии окна таймера
+    LaunchedEffect(Unit) {
+        onVisibilityChange(false)
+    }
+
+    // Обновление таймера
     LaunchedEffect(activeSession) {
         while (activeSession != null) {
-            currentTime = (System.currentTimeMillis() - (activeSession?.startTime ?: 0)) / 1000
+            currentTime = (System.currentTimeMillis() - activeSession!!.startTime) / 1000
             delay(1000)
         }
+        currentTime = 0 // сброс, когда сессия завершена
     }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            onVisibilityChange(true) // вернуть навигацию при закрытии
+            onDismiss()
+        },
         containerColor = MaterialTheme.colorScheme.background,
-        tonalElevation = 0.dp
+        tonalElevation = 0.dp,
+        modifier = Modifier.fillMaxSize(),
+        dragHandle = {}
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
@@ -53,11 +69,14 @@ fun TimerBottomSheet(
                 .padding(24.dp)
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "ТАЙМЕР",
+                    text = "ТАЙМЕР ДЛЯ РАБОТЫ",
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.secondary,
@@ -72,7 +91,7 @@ fun TimerBottomSheet(
                     style = MaterialTheme.typography.displayLarge.copy(
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.tertiary
+                        color = MaterialTheme.colorScheme.secondary
                     )
                 )
 
@@ -105,6 +124,7 @@ fun TimerBottomSheet(
                     Button(
                         onClick = {
                             viewModel.stopSession()
+                            onVisibilityChange(true)
                             onDismiss()
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -136,6 +156,22 @@ fun TimerBottomSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Bold
                     )
+                )
+
+                Spacer(modifier = Modifier.height(100.dp))
+
+                Text(
+                    text = "Лимит бездействия",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                InactivityCircleSelector(
+                    value = viewModel.inactivityLimitSeconds.collectAsState().value,
+                    onValueChange = { viewModel.saveInactivityLimit(it) },
+                    modifier = Modifier.size(200.dp)
                 )
             }
         }

@@ -47,7 +47,6 @@ fun AuthScreen(
     val authError by authViewModel.authError.collectAsState()
     val sheetState = rememberOneTapBottomSheetState()
     val scope = rememberCoroutineScope()
-
     val authParams by authViewModel.authParams.collectAsState()
 
     if (isLoggedIn) {
@@ -82,7 +81,7 @@ fun AuthScreen(
                     contentDescription = "Господин",
                     modifier = Modifier.fillMaxSize()
                 )
-                }
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
 
@@ -98,9 +97,7 @@ fun AuthScreen(
             Button(
                 onClick = {
                     authViewModel.prepareAuth()
-                    scope.launch {
-                        sheetState.show()
-                    }
+                    scope.launch { sheetState.show() }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isLoading,
@@ -116,6 +113,17 @@ fun AuthScreen(
                 } else {
                     Text("Войти через VK ID", style = MaterialTheme.typography.labelLarge)
                 }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = { authViewModel.guestLogin() },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Продолжить как гость", style = MaterialTheme.typography.labelLarge)
             }
 
             if (authError != null) {

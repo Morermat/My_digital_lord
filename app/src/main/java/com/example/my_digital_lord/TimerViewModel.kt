@@ -8,6 +8,7 @@ import android.app.Application
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.lifecycle.AndroidViewModel
 import com.google.gson.Gson
@@ -21,6 +22,7 @@ import androidx.core.content.edit
 class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
+        var isAppInBackground = false
         val Factory: androidx.lifecycle.ViewModelProvider.Factory = object : androidx.lifecycle.ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
@@ -77,6 +79,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         if (_activeSession.value != null) return
         val newSession = WorkSession()
         _activeSession.value = newSession
+        InactivityService.start(getApplication())
     }
 
     fun stopSession() {
@@ -92,27 +95,25 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         saveSessions()
         _activeSession.value = null
         cancelInactivityAlarm()
+        InactivityService.stop(getApplication())
     }
 
     @SuppressLint("ScheduleExactAlarm")
     @RequiresPermission(Manifest.permission.SCHEDULE_EXACT_ALARM)
     fun onAppBackgrounded() {
+        isAppInBackground = true
         if (_activeSession.value != null) {
             isInBackground = true
             backgroundTime = System.currentTimeMillis()
             scheduleInactivityAlarm(_inactivityLimitSeconds.value)
+            Log.d("TimerViewModel", "Будильник установлен на ${_inactivityLimitSeconds.value} секунд")
         }
     }
 
     fun onAppForegrounded() {
         cancelInactivityAlarm()
-        if (_activeSession.value != null && isInBackground) {
-            val timeAway = System.currentTimeMillis() - backgroundTime
-            if (timeAway > _inactivityLimitSeconds.value * 1000L) {
-                _activeSession.value = null
-            }
-            isInBackground = false
-        }
+        isAppInBackground = false
+        isInBackground = false
     }
 
     @RequiresPermission(Manifest.permission.SCHEDULE_EXACT_ALARM)
@@ -127,12 +128,21 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             )
             inactivityAlarmIntent = pendingIntent
             val triggerTime = System.currentTimeMillis() + limitSeconds * 1000L
+
+            // Основной метод – AlarmClock (показывает иконку будильника)
             alarmManager.setAlarmClock(
                 AlarmClockInfo(triggerTime, pendingIntent),
                 pendingIntent
             )
+            // Дополнительный – точный будильник, работающий в режиме ожидания
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                triggerTime,
+                pendingIntent
+            )
         } catch (e: SecurityException) {
             e.printStackTrace()
+            Log.e("TimerViewModel", "Не удалось установить будильник", e)
         }
     }
 

@@ -2,9 +2,9 @@ package com.example.my_digital_lord
 
 import android.annotation.SuppressLint
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import android.webkit.CookieManager
-import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.my_digital_lord.data.remote.VkAuthRequest
@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import com.vk.id.auth.VKIDAuthUiParams
-import androidx.core.content.edit
 import com.example.my_digital_lord.data.remote.LogoutRequest
 import com.example.my_digital_lord.utils.LogTags
 
@@ -31,7 +30,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     private val apiService = ServiceLocator.apiService
     private val tokenManager = TokenManager(application)
-    private val prefs = application.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
+    private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _isLoggedIn = MutableStateFlow(false)
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
@@ -47,6 +46,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _authParams = MutableStateFlow<VKIDAuthUiParams?>(null)
     val authParams: StateFlow<VKIDAuthUiParams?> = _authParams.asStateFlow()
+
+    private val _isGuestMode = MutableStateFlow(false)
+    val isGuestMode: StateFlow<Boolean> = _isGuestMode.asStateFlow()
 
     private var currentState: String? = null
 
@@ -81,10 +83,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         val codeVerifier = PkceUtil.generateCodeVerifier()
         val codeChallenge = PkceUtil.generateCodeChallenge(codeVerifier)
         val state = PkceUtil.generateState()
-
-        prefs.edit { putString(KEY_CODE_VERIFIER, codeVerifier) }
+        prefs.edit()
+            .putString(KEY_CODE_VERIFIER, codeVerifier)
+            .apply()
         currentState = state
-
         _authParams.value = VKIDAuthUiParams {
             this.state = state
             this.codeChallenge = codeChallenge
@@ -101,16 +103,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 val codeVerifier = prefs.getString(KEY_CODE_VERIFIER, null)
                     ?: throw IllegalStateException("PKCE code verifier not found")
                 val state = currentState ?: throw IllegalStateException("State not generated")
-
                 val request = VkAuthRequest(code, codeVerifier, deviceId, state)
                 val response: AuthResponse = apiService.exchangeCode(request)
                 Log.d(LogTags.AUTH, "exchangeCode response: accessToken=${response.accessToken.take(20)}..., refreshToken=${response.refreshToken.take(20)}..., user=${response.userProfile.firstName} ${response.userProfile.lastName}")
-
-                saveSession(
-                    accessToken = response.accessToken,
-                    refreshToken = response.refreshToken,
-                    user = response.userProfile
-                )
+                saveSession(response.accessToken, response.refreshToken, response.userProfile)
             } catch (e: Exception) {
                 _authError.value = "Ошибка входа: ${e.message}"
             } finally {
@@ -126,6 +122,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logout() {
         viewModelScope.launch {
+            _isLoggedIn.value = false
+            _userProfile.value = null
             val refreshToken = tokenManager.getRefreshToken()
             Log.d(LogTags.AUTH, "logout: sending refreshToken=${refreshToken?.take(20)}...")
             if (refreshToken != null) {
@@ -137,8 +135,32 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             clearSession()
-            prefs.edit { remove(KEY_CODE_VERIFIER) }
+            prefs.edit()
+                .remove(KEY_CODE_VERIFIER)
+                .apply()
             _authParams.value = null
         }
+    }
+
+    fun guestLogin() {
+        _isGuestMode.value = true
+        _isLoggedIn.value = true
+        _userProfile.value = UserProfile(
+            userId = 0,
+            firstName = "Гость",
+            lastName = "",
+            avatar = null,
+            sex = null
+        )
+        tokenManager.clear()
+    }
+
+    fun logoutFromGuest() {
+        val tasksPrefs = getApplication<Application>().getSharedPreferences("tasks_prefs", Context.MODE_PRIVATE)
+        tasksPrefs.edit().clear().apply()
+        clearSession()
+        _isGuestMode.value = false
+        _isLoggedIn.value = false
+        _userProfile.value = null
     }
 }

@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.my_digital_lord.di.ServiceLocator
 import com.example.my_digital_lord.data.remote.ParseRequest
 import com.example.my_digital_lord.utils.TaskParser
-import com.example.my_digital_lord.utils.ParsedTask   // импорт из TaskParser
+import com.example.my_digital_lord.utils.ParsedTask
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonDeserializer
@@ -20,24 +20,18 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.UUID
 
 class TasksViewModel : ViewModel() {
 
     private val prefs = App.getInstance().getSharedPreferences("tasks_prefs", Context.MODE_PRIVATE)
 
-    // Правильный Gson с явными типами для сериализатора/десериализатора
     private val gson: Gson = GsonBuilder()
-        .registerTypeAdapter(
-            LocalDateTime::class.java,
-            JsonSerializer<LocalDateTime> { src, _, _ ->
-                JsonPrimitive(src.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
-            }
+        .registerTypeAdapter(LocalDateTime::class.java,
+            JsonSerializer<LocalDateTime> { src, _, _ -> JsonPrimitive(src.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)) }
         )
-        .registerTypeAdapter(
-            LocalDateTime::class.java,
-            JsonDeserializer<LocalDateTime> { json, _, _ ->
-                LocalDateTime.parse(json.asString, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-            }
+        .registerTypeAdapter(LocalDateTime::class.java,
+            JsonDeserializer<LocalDateTime> { json, _, _ -> LocalDateTime.parse(json.asString, DateTimeFormatter.ISO_LOCAL_DATE_TIME) }
         )
         .create()
 
@@ -64,13 +58,11 @@ class TasksViewModel : ViewModel() {
             _tasks.value = gson.fromJson(json, type) ?: emptyList()
         }
         if (_tasks.value.isEmpty()) {
-            _tasks.value = listOf(
-                Task(
-                    title = "Добавь свою первую задачу",
-                    deadline = LocalDateTime.now().plusDays(2),
-                    priority = Priority.HIGH
-                )
-            )
+            _tasks.value = listOf(Task(
+                title = "Добавь свою первую задачу",
+                deadline = LocalDateTime.now().plusDays(2),
+                priority = Priority.HIGH
+            ))
             saveTasks()
         }
     }
@@ -91,26 +83,143 @@ class TasksViewModel : ViewModel() {
         _parseError.value = null
     }
 
+    fun updateTask(updatedTask: Task) {
+        _tasks.update { tasks -> tasks.map { if (it.id == updatedTask.id) updatedTask else it } }
+        saveTasks()
+    }
+
+    fun addTaskWithAiParse(rawText: String, category: TaskCategory, priority: Priority) {
+        viewModelScope.launch {
+            _isParsing.value = true
+            _parseError.value = null
+            try {
+                val parsed = TaskParser.parse(rawText)
+                val newTask = Task(
+                    title = parsed.title,
+                    description = rawText,
+                    deadline = parsed.deadline,
+                    priority = priority,
+                    category = category,
+                    isCompleted = false
+                )
+                _tasks.update { it + newTask }
+                saveTasks()
+            } catch (e: Exception) {
+                _parseError.value = "Ошибка парсинга: ${e.localizedMessage}"
+            } finally {
+                _isParsing.value = false
+                closeAddTaskSheet()
+            }
+        }
+    }
+
+    // ===== Подзадачи =====
+    fun toggleSubtask(taskId: String, subtaskId: String) {
+        _tasks.update { tasks ->
+            tasks.map { task ->
+                if (task.id == taskId) {
+                    val newSubtasks = task.subtasks.map { subtask ->
+                        if (subtask.id == subtaskId) subtask.copy(isCompleted = !subtask.isCompleted)
+                        else subtask
+                    }
+                    task.copy(subtasks = newSubtasks)
+                } else task
+            }
+        }
+        saveTasks()
+    }
+
+    fun addSubtask(taskId: String, subtaskTitle: String) {
+        if (subtaskTitle.isBlank()) return
+        _tasks.update { tasks ->
+            tasks.map { task ->
+                if (task.id == taskId) {
+                    val newSubtask = Subtask(title = subtaskTitle)
+                    task.copy(subtasks = task.subtasks + newSubtask)
+                } else task
+            }
+        }
+        saveTasks()
+    }
+
+    fun removeSubtask(taskId: String, subtaskId: String) {
+        _tasks.update { tasks ->
+            tasks.map { task ->
+                if (task.id == taskId) {
+                    task.copy(subtasks = task.subtasks.filter { it.id != subtaskId })
+                } else task
+            }
+        }
+        saveTasks()
+    }
+
+    // ===== Повторение и переключение выполнения =====
+    private var pendingRecurringTask: Task? = null
+
+    fun toggleTaskCompletion(taskId: String) {
+        _tasks.update { tasks ->
+            tasks.map { task ->
+                if (task.id == taskId) {
+                    val newCompleted = !task.isCompleted
+                    val updatedSubtasks = if (newCompleted) {
+                        // отмечаем все подзадачи выполненными
+                        task.subtasks.map { it.copy(isCompleted = true) }
+                    } else {
+                        task.subtasks // не меняем
+                    }
+                    val updatedTask = task.copy(
+                        isCompleted = newCompleted,
+                        subtasks = updatedSubtasks
+                    )
+                    if (newCompleted && task.recurrence.type != RecurrenceType.NONE) {
+                        val newTask = createRecurringTask(task)
+                        pendingRecurringTask = newTask
+                        updatedTask
+                    } else {
+                        updatedTask
+                    }
+                } else task
+            }
+        }
+        if (pendingRecurringTask != null) {
+            _tasks.update { it + pendingRecurringTask!! }
+            pendingRecurringTask = null
+        }
+        saveTasks()
+    }
+
+    private fun createRecurringTask(original: Task): Task {
+        val newDeadline = calculateNextDeadline(original.deadline, original.recurrence)
+        return original.copy(
+            id = UUID.randomUUID().toString(),
+            isCompleted = false,
+            subtasks = original.subtasks.map { it.copy(isCompleted = false, id = UUID.randomUUID().toString()) },
+            deadline = newDeadline,
+            createdAt = LocalDateTime.now()
+        )
+    }
+
+    private fun calculateNextDeadline(current: LocalDateTime?, rule: RecurrenceRule): LocalDateTime? {
+        if (current == null) return null
+        return when (rule.type) {
+            RecurrenceType.DAILY -> current.plusDays(rule.interval.toLong())
+            RecurrenceType.WEEKLY -> current.plusWeeks(rule.interval.toLong())
+            RecurrenceType.MONTHLY -> current.plusMonths(rule.interval.toLong())
+            else -> null
+        }
+    }
+
     fun addTaskWithAiParse(rawText: String) {
         viewModelScope.launch {
             _isParsing.value = true
             _parseError.value = null
-
             try {
-                // Сначала пробуем серверный AI
-                val serverResult = callServerAi(rawText)
-                val (title, deadline, priority) = if (serverResult != null) {
-                    Triple(serverResult.title, serverResult.deadline, serverResult.priority)
-                } else {
-                    val parsed = TaskParser.parse(rawText)
-                    Triple(parsed.title, parsed.deadline, parsed.priority)
-                }
-
+                val parsed = TaskParser.parse(rawText)
                 val newTask = Task(
-                    title = title,
+                    title = parsed.title,
                     description = rawText,
-                    deadline = deadline,
-                    priority = priority
+                    deadline = parsed.deadline,
+                    priority = parsed.priority
                 )
                 _tasks.update { it + newTask }
                 saveTasks()
@@ -164,12 +273,16 @@ class TasksViewModel : ViewModel() {
         }
     }
 
-    fun toggleTaskCompletion(taskId: String) {
-        _tasks.update { tasks ->
-            tasks.map { task ->
-                if (task.id == taskId) task.copy(isCompleted = !task.isCompleted) else task
-            }
-        }
+    fun addManualTask(title: String, description: String, deadline: LocalDateTime?, priority: Priority, category: TaskCategory) {
+        val newTask = Task(
+            title = title,
+            description = description,
+            deadline = deadline,
+            priority = priority,
+            category = category,
+            isCompleted = false
+        )
+        _tasks.update { it + newTask }
         saveTasks()
     }
 

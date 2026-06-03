@@ -1,6 +1,9 @@
 package com.example.my_digital_lord
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
@@ -29,11 +34,23 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.my_digital_lord.ui.theme.AppTheme
+import com.example.my_digital_lord.ui.theme.IceBackground
+import com.example.my_digital_lord.ui.theme.IcePrimary
+import com.example.my_digital_lord.ui.theme.IceSecondary
+import com.example.my_digital_lord.ui.theme.SunsetBackground
+import com.example.my_digital_lord.ui.theme.SunsetPrimary
+import com.example.my_digital_lord.ui.theme.SunsetSecondary
+import com.example.my_digital_lord.ui.theme.TerminalBackground
+import com.example.my_digital_lord.ui.theme.TerminalPrimary
+import com.example.my_digital_lord.ui.theme.TerminalSurface
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -60,7 +77,7 @@ fun StatsScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             Text(
-                text = "СТАТИСТИКА ГОСПОДИНА",
+                text = "СТАТИСТИКА ОТ ГОСПОДИНА",
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 2.sp
@@ -90,7 +107,7 @@ fun StatsScreen(
                         style = MaterialTheme.typography.headlineLarge.copy(
                             fontWeight = FontWeight.ExtraBold
                         ),
-                        color = MaterialTheme.colorScheme.tertiary
+                        color = MaterialTheme.colorScheme.secondary
                     )
 
                     if (topSessions.isNotEmpty()) {
@@ -142,7 +159,7 @@ fun StatsScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Господин ${if (completedTasks.size > 5) "доволен" else "ждёт большего"}",
+                        text = "Господин ${if (completedTasks.size > 5) "восхищен" else "ждёт большего"}",
                         style = MaterialTheme.typography.bodyLarge.copy(
                             fontWeight = FontWeight.SemiBold
                         ),
@@ -173,7 +190,10 @@ fun ProfileScreen(
     onThemeToggle: () -> Unit,
     onLogout: () -> Unit,
     authViewModel: AuthViewModel = viewModel(),
-    timerViewModel: TimerViewModel = viewModel()
+    timerViewModel: TimerViewModel = viewModel(),
+    currentTheme: AppTheme,
+    onThemeChange: (AppTheme) -> Unit,
+    isGuestMode: Boolean
 ) {
     val userProfile by authViewModel.userProfile.collectAsState()
     val inactivityLimit by timerViewModel.inactivityLimitSeconds.collectAsState()
@@ -243,38 +263,72 @@ fun ProfileScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            InactivityCircleSelector(
-                value = inactivityLimit,
-                onValueChange = { timerViewModel.saveInactivityLimit(it) },
-                modifier = Modifier.size(200.dp)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = onLogout,
+            Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
-                )
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                Text(
-                    "ВЫЙТИ ИЗ СИСТЕМЫ",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-                )
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Тема приложения", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(AppTheme.entries) { theme ->
+                            val isSelected = currentTheme == theme
+                            val previewColors = when (theme) {
+                                AppTheme.SUNSET_NEON -> listOf(SunsetPrimary, SunsetSecondary, SunsetBackground)
+                                AppTheme.RETRO_TERMINAL -> listOf(TerminalPrimary, TerminalBackground, TerminalSurface)
+                                AppTheme.ICE_GLITCH -> listOf(IcePrimary, IceSecondary, IceBackground)
+                            }
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { onThemeChange(theme) }
+                                    .border(
+                                        width = if (isSelected) 3.dp else 0.dp,
+                                        color = if (isSelected) MaterialTheme.colorScheme.secondary else Color.Transparent,
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .size(60.dp, 40.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(previewColors.first())
+                                ) {
+                                    previewColors.drop(1).forEach { color ->
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .background(color)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(200.dp))
+
+            if (isGuestMode) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        authViewModel.logoutFromGuest()
+                        onLogout()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                ) {
+                    Text("Выйти из гостевого режима")
+                }
             }
         }
     }
 }
 
-private fun formatSeconds(seconds: Int): String {
-    val mins = seconds / 60
-    val secs = seconds % 60
-    return if (mins > 0) "${mins} мин ${secs} с" else "${secs} с"
-}

@@ -1,6 +1,7 @@
 package com.example.my_digital_lord.utils
 
 import com.example.my_digital_lord.Priority
+import com.example.my_digital_lord.TaskCategory
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -77,5 +78,12 @@ object TaskParser {
         if (title.isBlank()) title = raw
 
         return ParsedTask(title, deadline, priority, category)
+    }
+
+    fun parseCategory(raw: String): TaskCategory = when {
+        raw.contains("работа", ignoreCase = true) -> TaskCategory.WORK
+        raw.contains("учёба", ignoreCase = true) -> TaskCategory.STUDY
+        raw.contains("здоровье", ignoreCase = true) -> TaskCategory.HEALTH
+        else -> TaskCategory.PERSONAL
     }
 }

@@ -97,7 +97,7 @@ fun SplashScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(
-                text = "МОЙ ЦИФРОВОЙ ГОСПОДИ",
+                text = "МОЙ ЦИФРОВОЙ ГОСПОДИН",
                 style = MaterialTheme.typography.displaySmall.copy(
                     fontSize = 36.sp,
                     letterSpacing = 4.sp
